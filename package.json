@@ -1,0 +1,35 @@
+{
+  "name": "web-bot-auth",
+  "description": "The monorepo for web-bot-auth",
+  "type": "module",
+  "keywords": [
+    "web-bot-auth",
+    "typescript"
+  ],
+  "author": "Thibault Meunier",
+  "private": true,
+  "scripts": {
+    "build": "npm run build -w http-message-sig -w jsonwebkey-thumbprint -w web-bot-auth",
+    "format": "prettier --write . && eslint examples/**/*.ts packages/**/*.ts --ignore-pattern **/dist/** eslint.config.mjs --fix",
+    "lint": "prettier . && eslint examples/**/*.ts packages/**/*.ts --ignore-pattern **/dist/** eslint.config.mjs",
+    "test": "npm run test -w http-message-sig -- --run && npm run test -w jsonwebkey-thumbprint -- --run && npm run test -w web-bot-auth -- --run && npm run test -w verification-workers -- --run"
+  },
+  "license": "Apache-2.0",
+  "version": "0.0.0",
+  "devDependencies": {
+    "@eslint/js": "9.28.0",
+    "eslint": "9.28.0",
+    "eslint-plugin-security": "3.0.1",
+    "prettier": "3.5.3",
+    "rimraf": "6.0.1",
+    "tsup": "8.5.0",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.34.0",
+    "vitest": "3.2.3"
+  },
+  "workspaces": [
+    "examples/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@11.3.0"
+}

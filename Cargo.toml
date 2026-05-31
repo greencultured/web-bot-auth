@@ -1,0 +1,38 @@
+[workspace]
+members = [
+    "crates/*",
+    "examples/rust",
+    "examples/signature-agent-card-and-registry"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.7.0"
+authors = [
+    "Akshat Mahajan <akshat@cloudflare.com>",
+    "Gauri Baraskar <gbaraskar@cloudflare.com>",
+    "Armando Faz <armfazh@cloudflare.com>",
+    "Thibault Meunier <thibault@cloudflare.com>"
+]
+edition = "2024"
+readme = "README.md"
+homepage = "https://github.com/cloudflare/web-bot-auth"
+repository = "https://github.com/cloudflare/web-bot-auth"
+keywords = ["web-bot-auth", "http-signatures", "message-signatures", "rfc9421", "cryptography"]
+categories = ["cryptography"]
+license = "Apache-2.0"
+
+[workspace.dependencies]
+ed25519-dalek = { version = "2.1.1", features = ["pkcs8"] }
+indexmap = "2.0"
+sfv = "0.13.0"
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10.9"
+base64 = "0.22.1"
+serde_json = "1.0.140"
+data-url = "0.3.1"
+regex = "1.12.2"
+time = { version = "0.3.44" }
+
+# workspace dependencies
+web-bot-auth = { version = "0.7.0", path = "./crates/web-bot-auth" }

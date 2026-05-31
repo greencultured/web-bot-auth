@@ -1,0 +1,180 @@
+import { vi, describe, it, expect } from "vitest";
+import {
+  generateNonce,
+  REQUEST_COMPONENTS,
+  signatureHeaders,
+  validateNonce,
+  NONCE_LENGTH_IN_BYTES,
+  SIGNATURE_AGENT_HEADER,
+  verify,
+  recommendedComponents,
+} from "../src/index";
+import { signerFromJWK, verifierFromJWK } from "../src/crypto";
+import { b64Tou8, u8ToB64 } from "../src/base64";
+
+import vectors1 from "./test_data/web_bot_auth_architecture_v1.json";
+import vectors2 from "./test_data/web_bot_auth_architecture_v2.json";
+
+const vectors = [...vectors1, ...vectors2];
+type Vectors = (typeof vectors)[number];
+
+describe.each(vectors)("Web-bot-auth-ed25519-Vector-%#", (v: Vectors) => {
+  it("should pass IETF draft test vectors", async () => {
+    const signer = await signerFromJWK(v.key);
+
+    const headers = new Headers();
+    if (v.signature_agent) {
+      headers.append(SIGNATURE_AGENT_HEADER, v.signature_agent);
+    }
+    const request = new Request(v.target_url, { headers });
+    const signedHeaders = await signatureHeaders(request, signer, {
+      components: Object.hasOwnProperty.call(v, "signature_agent_key")
+        ? recommendedComponents(v["signature_agent_key"])
+        : v.signature_agent
+          ? ["@authority", "signature-agent"]
+          : recommendedComponents(),
+      created: new Date(v.created_ms),
+      expires: new Date(v.expires_ms),
+      nonce: v.nonce,
+      key: v.label,
+    });
+
+    expect(signedHeaders["Signature-Input"]).toBe(v.signature_input);
+
+    // Appending signed header to the request, given that's what the origin receives
+    headers.append("Signature", signedHeaders["Signature"]);
+    headers.append("Signature-Input", signedHeaders["Signature-Input"]);
+    const signedRequest = new Request(request.url, {
+      headers,
+    });
+
+    vi.setSystemTime(new Date(v.created_ms));
+    expect(
+      await verify(signedRequest, await verifierFromJWK(v.key))
+    ).toBeUndefined();
+    vi.useRealTimers();
+  });
+});
+
+describe("custom components", () => {
+  const ed25519Key =
+    vectors.find((v) => v.key.kty === "OKP")?.key ?? vectors[0].key;
+
+  it("should sign with custom components including additional headers", async () => {
+    const signer = await signerFromJWK(ed25519Key);
+
+    const headers = new Headers();
+    headers.append(SIGNATURE_AGENT_HEADER, "https://example.bot.com");
+    headers.append("accept", "text/html");
+    const request = new Request("https://example.com", { headers });
+
+    const signedHeaders = await signatureHeaders(request, signer, {
+      created: new Date(1735689600000),
+      expires: new Date(1735693200000),
+      components: [...REQUEST_COMPONENTS, "accept"],
+    });
+
+    // Verify that the Signature-Input includes the custom component
+    expect(signedHeaders["Signature-Input"]).toContain('"accept"');
+    expect(signedHeaders["Signature-Input"]).toContain('"@authority"');
+    expect(signedHeaders["Signature-Input"]).toContain('"signature-agent"');
+  });
+
+  it("should reject custom components missing signature-agent when header is present", async () => {
+    const signer = await signerFromJWK(ed25519Key);
+
+    const headers = new Headers();
+    headers.append(SIGNATURE_AGENT_HEADER, "https://example.bot.com");
+    const request = new Request("https://example.com", { headers });
+
+    expect(() =>
+      signatureHeaders(request, signer, {
+        created: new Date(1735689600000),
+        expires: new Date(1735693200000),
+        components: ["@authority"], // missing signature-agent
+      })
+    ).toThrow(`${SIGNATURE_AGENT_HEADER} is required in params.component`);
+  });
+
+  it("should allow custom components without signature-agent when header is absent", async () => {
+    const signer = await signerFromJWK(ed25519Key);
+
+    const request = new Request("https://example.com");
+
+    const signedHeaders = await signatureHeaders(request, signer, {
+      created: new Date(1735689600000),
+      expires: new Date(1735693200000),
+      components: ["@authority"],
+    });
+
+    expect(signedHeaders["Signature-Input"]).toContain('"@authority"');
+    expect(signedHeaders["Signature-Input"]).not.toContain('"signature-agent"');
+  });
+});
+
+describe("nonce", () => {
+  describe("generateNonce", () => {
+    it("should generate a base64 string", () => {
+      const nonce = generateNonce();
+      expect(typeof nonce).toBe("string");
+      // Base64 regex pattern
+      expect(() => b64Tou8(nonce)).not.toThrowError();
+    });
+
+    it("should generate nonce with correct length when decoded", () => {
+      const nonce = generateNonce();
+      const decoded = b64Tou8(nonce);
+      expect(decoded.length).toBe(NONCE_LENGTH_IN_BYTES);
+    });
+
+    it("should generate unique nonces", () => {
+      const nonce1 = generateNonce();
+      const nonce2 = generateNonce();
+      const nonce3 = generateNonce();
+      expect(nonce1).not.toBe(nonce2);
+      expect(nonce2).not.toBe(nonce3);
+      expect(nonce1).not.toBe(nonce3);
+    });
+  });
+
+  describe("validateNonce", () => {
+    it("should validate correctly generated nonces", () => {
+      const nonce = generateNonce();
+      expect(validateNonce(nonce)).toBe(true);
+    });
+
+    it("should reject invalid base64 strings", () => {
+      expect(validateNonce("not-base64!@#$")).toBe(false);
+    });
+
+    it("should reject empty string", () => {
+      expect(validateNonce("")).toBe(false);
+    });
+
+    it("should reject nonces of incorrect length", () => {
+      // Create a small base64 string
+      const shortNonce = btoa("too short");
+      expect(validateNonce(shortNonce)).toBe(false);
+
+      // Create a long base64 string
+      const longArray = new Uint8Array(NONCE_LENGTH_IN_BYTES + 10);
+      crypto.getRandomValues(longArray);
+      const longNonce = u8ToB64(longArray);
+      expect(validateNonce(longNonce)).toBe(false);
+    });
+
+    it.each([[null], [undefined], [123], [{}], [[]], [true]])(
+      "should handle invalid input type: %s",
+      (invalidInput: unknown) => {
+        expect(validateNonce(invalidInput as string)).toBe(false);
+      }
+    );
+
+    it("should validate multiple generated nonces", () => {
+      for (let i = 0; i < 10; i++) {
+        const nonce = generateNonce();
+        expect(validateNonce(nonce)).toBe(true);
+      }
+    });
+  });
+});

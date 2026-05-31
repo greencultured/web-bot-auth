@@ -1,0 +1,37 @@
+{
+  "name": "http-message-signatures-extension",
+  "version": "0.2.0",
+  "description": "Enterprise browser extension adding an HTTP Message signature to all requests",
+  "scripts": {
+    "build:chrome": "tsup src/background.ts --format esm --platform browser --target chrome100 --clean --out-dir dist/mv3/chromium --external node:crypto",
+    "bundle:chrome": "npm run build:chrome && node ./scripts/build_web_artifacts.mjs",
+    "start:config": "http-server ./dist/web-ext-artifacts -p 8000",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clean": "rimraf dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cloudflareresearch/web-bot-auth.git",
+    "directory": "examples/browser-extension"
+  },
+  "keywords": [
+    "chrome-extension",
+    "cryptography",
+    "typescript",
+    "http-message-signatures",
+    "rfc9421"
+  ],
+  "author": "Thibault Meunier",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/cloudflareresearch/web-bot-auth/issues"
+  },
+  "homepage": "https://github.com/cloudflareresearch/web-bot-auth#readme",
+  "devDependencies": {
+    "@types/chrome": "0.0.326",
+    "@types/libsodium-wrappers": "0.7.14",
+    "crx": "5.0.1",
+    "http-server": "14.1.1",
+    "libsodium-wrappers": "0.7.15"
+  }
+}
